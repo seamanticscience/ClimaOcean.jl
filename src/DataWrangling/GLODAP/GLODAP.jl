@@ -32,6 +32,8 @@ using KernelAbstractions: @kernel, @index
 
 using Dates: year, month, day
 
+using Tar, CodecZlib
+
 import Oceananigans: location
 
 import ClimaOcean.DataWrangling:
@@ -60,7 +62,7 @@ end
 struct GLODAP2Climatology end
 
 function default_download_directory(::GLODAP2Climatology)
-    path = joinpath(download_GLODAP_cache, "v2", "clim")
+    path = joinpath(download_GLODAP_cache, "v2", "data")
     return mkpath(path)
 end
 
@@ -82,75 +84,75 @@ longitude_interfaces(::GLODAP2Climatology) = (0, 360)
 latitude_interfaces(::GLODAP2Climatology) = (-90, 90)
 
 z_interfaces(::GLODAP2Climatology) = [
-    0, 
-    10, 
-    20, 
-    30,
-    50, 
-    75, 
-    100, 
-    125, 
-    150, 
-    200, 
-    250, 
-    300, 
-    400, 
-    500, 
-    600, 
-    700,
-    800, 
-    900, 
-    1000, 
-    1100, 
-    1200, 
-    1300, 
-    1400, 
-    1500, 
-    1750, 
-    2000, 
-    2500, 
-    3000, 
-    3500, 
-    4000, 
-    4500, 
-    5000, 
-    5500
+    -6000,
+    -5500,
+    -5000,
+    -4500,
+    -4000,
+    -3500,
+    -3000,
+    -2500,
+    -2000,
+    -1750,
+    -1500,
+    -1400,
+    -1300,
+    -1200,
+    -1100,
+    -1000,
+    -900,
+    -800,
+    -700,
+    -600,
+    -500,
+    -400,
+    -300,
+    -250,
+    -200,
+    -150,
+    -125,
+    -100,
+    -75,
+    -50,
+    -30,
+    -20,
+    -10,
+    0,
 ]
-
 available_variables(::GLODAP2Climatology) = GLODAP2_dataset_variable_names
 
 GLODAP2_dataset_variable_names = Dict(
-    :temperature           => "temperature",
-    :salinity              => "salinity",
-    :DIC                   => "TCO2",
-    :ALK                   => "TAlk",
-    :PO₄                   => "PO4",
-    :NO₃                   => "NO3",
-    :O₂                    => "oxygen",
-    :Siᵀ                   => "silicate",
-    :pHp0                  => "pHts25p0",
-    :pHpz                  => "pHtsinsitutp",
-    :OmegaA                => "OmegaA",
-    :OmegaC                => "OmegaC",
-    :Cant                  => "Cant",
-    :Cpi               => "PI_TCO2"
+    :temperature                => "temperature",
+    :salinity                   => "salinity",
+    :dissolved_inorganic_carbon => "TCO2",
+    :alkalinity                 => "TAlk",
+    :phosphate                  => "PO4",
+    :nitrate                    => "NO3",
+    :silicate                   => "silicate",
+    :disssolved_oxygen          => "oxygen",
+    :potential_pH               => "pHts25p0",
+    :pH                         => "pHtsinsitutp",
+    :saturation_state_aragonite => "OmegaA",
+    :saturation_state_calcite   => "OmegaC",
+    :antropogenic_carbon        => "Cant",
+    :natural_carbon             => "PI_TCO2",
 )
 
 GLODAP_location = Dict(
-    :temperature           => (Center, Center, Center),
-    :salinity              => (Center, Center, Center),
-    :DIC                   => (Center, Center, Center),
-    :ALK                   => (Center, Center, Center),
-    :PO₄                   => (Center, Center, Center),
-    :NO₃                   => (Center, Center, Center),
-    :O₂                    => (Center, Center, Center),
-    :Siᵀ                   => (Center, Center, Center),
-    :pHp0                  => (Center, Center, Center),
-    :pHpz                  => (Center, Center, Center),
-    :OmegaA                => (Center, Center, Center),
-    :OmegaC                => (Center, Center, Center),
-    :Cant                  => (Center, Center, Center),
-    :Cpi                   => (Center, Center, Center)
+    :temperature                => (Center, Center, Center),
+    :salinity                   => (Center, Center, Center),
+    :dissolved_inorganic_carbon => (Center, Center, Center),
+    :alkalinity                 => (Center, Center, Center),
+    :phosphate                  => (Center, Center, Center),
+    :nitrate                    => (Center, Center, Center),
+    :silicate                   => (Center, Center, Center),
+    :dissolved_oxygen           => (Center, Center, Center),
+    :potential_pH               => (Center, Center, Center),
+    :pH                         => (Center, Center, Center),
+    :saturation_state_aragonite => (Center, Center, Center),
+    :saturation_state_calcite   => (Center, Center, Center),
+    :antropogenic_carbon        => (Center, Center, Center),
+    :natural_carbon             => (Center, Center, Center),
 )
 
 const GLODAPMetadata{D} = Metadata{<:GLODAP2Climatology, D}
@@ -171,11 +173,10 @@ function GLODAPMetadatum(name;
 end
 
 metaprefix(::GLODAPMetadata) = "GLODAPMetadata"
-fileprefix(::GLODAP2Climatology) = "GLODAPv2.2016b."
 
 # File name generation specific to each dataset
 function metadata_filename(metadata::Metadatum{<:GLODAP2Climatology})
-    prefix    = fileprefix(metadata.dataset)
+    prefix    = "GLODAPv2.2016b"
     shortname = dataset_variable_name(metadata)
     return prefix * "." * shortname * ".nc"
 end
@@ -189,18 +190,18 @@ is_three_dimensional(data::GLODAPMetadata) = true
 # URLs for the GLODAP datasets specific to each dataset
 metadata_url(m::Metadata{<:GLODAP2Climatology}) = GLODAP2_url * "monthly/" * dataset_variable_name(m) * "/" * metadata_filename(m)
 
-function metadata_url(m::Metadata{<:GLODAP2Climatology})
-    year = string(Dates.year(m.dates))
-    return GLODAP4_url * dataset_variable_name(m) * "/" * year * "/" * metadata_filename(m)
-end
+#function metadata_url(m::Metadata{<:GLODAP2Climatology})
+#    year = string(Dates.year(m.dates))
+#    return GLODAP4_url * dataset_variable_name(m) * "/" * year * "/" * metadata_filename(m)
+#end
 
 function download_dataset(metadata::GLODAPMetadata)
-    dir = metadata.dir
-    tarball_path = joinpath(dir, "GLODAP2.tar.gz")
+    dir          = metadata.dir
+    tarball_path = joinpath(replace(dir,"/data"=>""), "GLODAP2.tar.gz")
 
     # Download the tar.gz file if it doesn't exist
     if !isfile(tarball_path)
-        @info "Downloading GLODAP2 tarball from $GLODAP2_url to $tarball_path..."
+        @info "Downloading tarball from $GLODAP2_url to $tarball_path..."
         Downloads.download(GLODAP2_url, tarball_path; progress=download_progress)
     else
         @info "GLODAP2 tarball already exists at $tarball_path, skipping download."
@@ -208,8 +209,31 @@ function download_dataset(metadata::GLODAPMetadata)
 
     # Extract the tar.gz file
     @info "Extracting $tarball_path to $dir..."
-    run(`tar -xzf $tarball_path -C $dir`)
+    # Remove previously extracted directories or existing nc files in metadata.dir to avoid confusion
+    foreach(x -> rm(x; recursive=true, force=true), readdir(dir, join=true))
 
+    # Extract only .nc files from the tarball into the embedded directory structure of the tarball
+    open(tarball_path) do tmp
+        gzstream = GzipDecompressorStream(tmp)
+        Tar.extract(
+                    h -> h.type == :file && 
+                    endswith(lowercase(h.path), ".nc"),
+                    gzstream, 
+                    dir,
+                   )
+    end
+
+    # find the .nc files within the tarball's embedded directory structure and move them to dir
+    for (root, _, files) in walkdir(dir)
+        for fname in files
+            if endswith(lowercase(fname), ".nc")
+                src = joinpath(root, fname)
+                destination_file = joinpath(dir, basename(fname))
+
+                mv(src, destination_file; force=true)
+            end
+        end
+    end
     return nothing
 end
 
